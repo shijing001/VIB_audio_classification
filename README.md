@@ -1,7 +1,7 @@
 # VIB audio classification
 Audio classification with variational information bottleneck (VIB)
 
-## rncironment setting 
+## environment setting 
 -python 3.7.4
 -torch 1.7.1
 

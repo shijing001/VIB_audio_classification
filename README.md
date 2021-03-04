@@ -1,7 +1,7 @@
 # VIB audio classification
 Audio classification with variational information bottleneck (VIB)
 
-## environment setting 
+## Dependencies
 -python 3.7.4
 -torch 1.7.1
 
@@ -25,3 +25,8 @@ python main.py --mode train --beta 1e-3 --env_name [NAME]
 
 2. test
 python main.py --mode test --env_name [NAME] --load_ckpt best_acc.tar
+
+## References
+
+1. Deep Variational Information Bottleneck, Alemi et al. [paper] (https://arxiv.org/abs/1612.00410)
+2. Variational Information Bottleneck for Effective Low-Resource Fine-Tuning, Karimi et al. [paper](https://openreview.net/forum?id=kvhzKz-_DMF)

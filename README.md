@@ -20,8 +20,10 @@ The classes the model wants to predict are the following: (0 = neutral, 1 = calm
 
 For the VIB audio classifier, You can either run the Notebook or enter he following lines in terminal directly 
 
-1. train (with default values all parameters unless specified)
+1. train 
 python main.py --mode train --beta 1e-3 --env_name [NAME]
+
+(with default values all parameters unless specified)
 
 2. test
 python main.py --mode test --env_name [NAME] --load_ckpt best_acc.tar

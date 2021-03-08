@@ -10,18 +10,15 @@ from numbers import Number
 import numpy as np
 
 
-
-dimin=128
-output_features=10
 class ToyNet(nn.Module):
 
-    def __init__(self, K, dimin, output_features):
+    def __init__(self, K, dim_input, output_features):
         super(ToyNet, self).__init__()
         self.K = K
-        self.dimin=dimin
+        self.dim_input=dim_input
         self.output_features=output_features
         self.encode = nn.Sequential(
-            nn.Linear(self.dimin,1024),
+            nn.Linear(self.dim_input, 1024),
             nn.ReLU(True),
             nn.Linear(1024, 1024),
             nn.ReLU(True),

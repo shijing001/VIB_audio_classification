@@ -28,7 +28,7 @@ class Solver(object):
         self.lr = args.lr
         self.eps = 1e-9
         self.K = args.K
-        self.dimin =args.dimin
+        self.dim_input =args.dim_input
         self.output_features=args.output_features
         self.beta = args.beta
         self.num_avg = args.num_avg
@@ -36,9 +36,9 @@ class Solver(object):
         self.global_epoch = 0
 
         # Network & Optimizer
-        self.toynet = cuda(ToyNet(self.K,self.dimin,self.output_features), self.cuda)
+        self.toynet = cuda(ToyNet(self.K,self.dim_input,self.output_features), self.cuda)
         self.toynet.weight_init()
-        self.toynet_ema = Weight_EMA_Update(cuda(ToyNet(self.K,self.dimin,self.output_features), self.cuda),\
+        self.toynet_ema = Weight_EMA_Update(cuda(ToyNet(self.K,self.dim_input,self.output_features), self.cuda),\
                 self.toynet.state_dict(), decay=0.999)
 
         self.optim = optim.Adam(self.toynet.parameters(),lr=self.lr,betas=(0.5,0.999))
@@ -71,13 +71,10 @@ class Solver(object):
         self.data_loader =  args.dataset
         print(self.data_loader)
 
-    def set_mode(self,mode='train'):
+    def set_mode(self, mode='train'):
         if mode == 'train' :
             self.toynet.train()
             self.toynet_ema.model.train()
-        elif mode == 'validate':
-            self.toynet.validate()
-            self.toynet_ema.model.validate()
         elif mode == 'eval' :
             self.toynet.eval()
             self.toynet_ema.model.eval()
@@ -85,7 +82,7 @@ class Solver(object):
 
     def train(self):
         self.set_mode('train')
-        for e in range(self.epoch) :
+        for e in range(self.epoch):  ## each epoch
             self.global_epoch += 1
             print('epoch. ', self.global_epoch)
             for idx, (data,label) in enumerate(self.data_loader['train']):
@@ -99,7 +96,6 @@ class Solver(object):
                 info_loss = -0.5*(1+2*std.log()-mu.pow(2)-std.pow(2)).sum(1).mean().div(math.log(2))
                 total_loss = class_loss + self.beta*info_loss
                 #print("class_loss is,",class_loss,"    ,info_loss is",info_loss,"   ,total_loss",total_loss)
-             
                 #print(std.log().max(),std.log().min())
                 izy_bound = math.log(10,2) - class_loss
                 izx_bound = info_loss
@@ -108,7 +104,7 @@ class Solver(object):
                 total_loss.backward()
                 self.optim.step()
                 self.toynet_ema.update(self.toynet.state_dict())
-
+                ## prediction over a mini-batch
                 prediction = F.softmax(logit,dim=1).max(1)[1]
                 accuracy = torch.eq(prediction,y).float().mean()
            
@@ -160,13 +156,14 @@ class Solver(object):
                   .format(accuracy.item(), avg_accuracy.item()), end=' ')
             print('err:{:.4f} avg_err:{:.4f}'
                   .format(1-accuracy.item(), 1-avg_accuracy.item()))
-            
+            ## valuate at each epoch
             self.validate()
 
         print(" [*] Training Finished!")
+        
     def validate(self, save_ckpt=True):
-        #self.set_mode('validate')
-        print(save_ckpt)
+        self.set_mode('eval')
+        #print(save_ckpt)
         class_loss = 0
         info_loss = 0
         total_loss = 0
@@ -177,6 +174,7 @@ class Solver(object):
         total_num = 0
         y_real=torch.randn([0])
         y_hat=torch.randn([0])
+        ## loop over mini-batches
         for idx, (images,labels) in enumerate(self.data_loader['validate']):
 
             x = Variable(cuda(images, self.cuda))
@@ -262,7 +260,16 @@ class Solver(object):
 
         self.set_mode('train')
 
-    def test(self, save_ckpt=True):
+    def test(self, save_ckpt=False, data_set='test'):
+        """
+        evaluate the performance over a specific dataset
+        
+        :params[in]: data_set, str, which section of data to use,
+                     data_set = 'train' to use training data, 'valid' for validation data, 
+                     'test' for testing dataset
+                     
+        
+        """
         self.set_mode('eval')
         class_loss = 0
         info_loss = 0
@@ -272,10 +279,14 @@ class Solver(object):
         correct = 0
         avg_correct = 0
         total_num = 0
+        ## define empty tensors
         y_real=torch.randn([0])
         y_hat=torch.randn([0])
-        for idx, (images,labels) in enumerate(self.data_loader['test']):
-
+        ## for testing over best model
+        if data_set == 'test':
+            self.load_checkpoint(filename='best_acc.tar')
+        ## loop over mini-batches
+        for idx, (images,labels) in enumerate(self.data_loader[data_set]):
             x = Variable(cuda(images, self.cuda))
             y = Variable(cuda(labels, self.cuda))
             (mu, std), logit = self.toynet_ema.model(x)
@@ -290,7 +301,7 @@ class Solver(object):
             izx_bound += info_loss
             prediction = F.softmax(logit,dim=1).max(1)[1]
             y_real=torch.cat([y_real,y],dim=0)
-            y_hat=torch.cat([y_hat,prediction],dim=0)
+            y_hat=torch.cat([y_hat, prediction],dim=0)
             correct += torch.eq(prediction,y).float().sum()
             
 
@@ -320,18 +331,7 @@ class Solver(object):
                 .format(1-accuracy.item(), 1-avg_accuracy.item()))
         print(classification_report(y_real,y_hat))
         #print()
-              
-        
-      
-        
-        if self.history['avg_acc'] < avg_accuracy.item() :
-            self.history['avg_acc'] = avg_accuracy.item()
-            self.history['class_loss'] = class_loss.item()
-            self.history['info_loss'] = info_loss.item()
-            self.history['total_loss'] = total_loss.item()
-            self.history['epoch'] = self.global_epoch
-            self.history['iter'] = self.global_iter
-            if save_ckpt : self.save_checkpoint('best_acc.tar')
+
 
         if self.tensorboard :
             self.tf.add_scalars(main_tag='performance/accuracy',
@@ -356,7 +356,6 @@ class Solver(object):
                                     'I(Z;X)':izx_bound.item()},
                                 global_step=self.global_iter)
 
-        self.set_mode('train')
 
     def save_checkpoint(self, filename='best_acc.tar'):
         model_states = {

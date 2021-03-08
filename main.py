@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 
 class CustomDataset(Dataset):
     """
-    construct dataset from numpy
+    construct dataset from numpy arrays
     
     """
     def __init__(self, data, target, transform=None):
@@ -29,7 +29,9 @@ class CustomDataset(Dataset):
         return len(self.data)
 
 def main(args):
-
+    """"
+    main function
+    """
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
 
@@ -56,9 +58,9 @@ def main(args):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='TOY VIB')
+    parser = argparse.ArgumentParser(description='VIB for neural networks')
     parser.add_argument('--data', default = 'urbansound8k', type=str, help='input data source used')
-    parser.add_argument('--dimin', default = 0, type=int, help='input dimension')
+    parser.add_argument('--dim_input', default = 0, type=int, help='input dimension')
     parser.add_argument('--output_features', default = 0, type=int, help='ioutput features number ')
     parser.add_argument('--epoch', default = 100, type=int, help='epoch size')
     parser.add_argument('--lr', default = 1e-4, type=float, help='learning rate')
@@ -66,7 +68,7 @@ if __name__ == "__main__":
     parser.add_argument('--K', default = 256, type=int, help='dimension of encoding Z')
     parser.add_argument('--seed', default = 1, type=int, help='random seed')
     parser.add_argument('--num_avg', default = 1, type=int, help='the number of samples when\
-            perform multi-shot prediction')
+            performing multi-shot prediction')
     parser.add_argument('--dataset', default= '', type=str, help='dataset name')
     parser.add_argument('--batch_size', default = 32, type=int, help='batch size')
     parser.add_argument('--env_name', default='main', type=str, help='visdom env name')
@@ -77,16 +79,16 @@ if __name__ == "__main__":
     parser.add_argument('--cuda',default=True, type=str2bool, help='enable cuda')
     parser.add_argument('--mode',default='train', type=str, help='train or test')
     parser.add_argument('--tensorboard',default=False, type=str2bool, help='enable tensorboard')
+    
     args = parser.parse_args()
     ### create data loader
     if args.data=='urbansound8k': 
         X,y = joblib.load('./joblib_features/Xurbansound8k.joblib'),joblib.load('./joblib_features/yurbansound8k.joblib')
-        args.dimin=128
-        args.output_features=10
     elif args.data=='emotiontoronto':
         X,y = joblib.load('./joblib_features/X.joblib'),joblib.load('./joblib_features/y.joblib')
-        args.dimin=40
-        args.output_features=8
+    ## dimension input
+    args.dim_input = X.shape[1]
+    args.output_features = len(set(y))
     full_dataset = CustomDataset(X, y)
     train_size = int(0.6 * len(full_dataset))
     valid_size = int(0.2 * len(full_dataset))
@@ -95,11 +97,10 @@ if __name__ == "__main__":
                                                             #[train_size, test_size])
                                 
     train_dataset, valid_dataset, test_dataset = torch.utils.data.random_split(
-    full_dataset, (train_size, valid_size, test_size)
-)
+    full_dataset, (train_size, valid_size, test_size), generator=torch.Generator().manual_seed(42))
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     
-    valid_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     my_dataloader = {'train': train_dataloader , 'validate':valid_dataloader, 'test': test_dataloader}
     

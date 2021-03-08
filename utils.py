@@ -23,7 +23,7 @@ def cuda(tensor, is_cuda):
 
 class Weight_EMA_Update(object):
 
-    def __init__(self, model, initial_state_dict, decay=0.999):
+    def __init__(self, model, initial_state_dict, decay=0.9):
         self.model = model
         self.model.load_state_dict(initial_state_dict, strict=True)
         self.decay = decay

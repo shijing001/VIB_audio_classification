@@ -16,6 +16,11 @@ import matplotlib.pyplot as plt
 from model import ToyNet
 from pathlib import Path
 from sklearn.metrics import classification_report
+import sklearn.metrics
+import json
+import pathlib
+
+
 
 class Solver(object):
 
@@ -28,13 +33,14 @@ class Solver(object):
         self.lr = args.lr
         self.eps = 1e-9
         self.K = args.K
+        self.train_dataset_percentage=args.train_dataset_percentage
         self.dim_input =args.dim_input
         self.output_features=args.output_features
         self.beta = args.beta
         self.num_avg = args.num_avg
         self.global_iter = 0
         self.global_epoch = 0
-
+        
         # Network & Optimizer
         self.toynet = cuda(ToyNet(self.K,self.dim_input,self.output_features), self.cuda)
         self.toynet.weight_init()
@@ -82,16 +88,19 @@ class Solver(object):
 
     def train(self):
         self.set_mode('train')
+        vib_train = {"Accuracy":[],"F1_Score":[]}
+        vib_valid = {"Accuracy":[],"F1_Score":[]}
+      
         for e in range(self.epoch):  ## each epoch
             self.global_epoch += 1
+            y_real=torch.randn([0])
+            y_hat=torch.randn([0])
             print('epoch. ', self.global_epoch)
             for idx, (data,label) in enumerate(self.data_loader['train']):
-               
-
                 x = Variable(cuda(data, self.cuda))
                 y = Variable(cuda(label, self.cuda))
                 (mu, std), logit = self.toynet(x)
-
+                
                 class_loss = F.cross_entropy(logit,y).div(math.log(2))
                 info_loss = -0.5*(1+2*std.log()-mu.pow(2)-std.pow(2)).sum(1).mean().div(math.log(2))
                 total_loss = class_loss + self.beta*info_loss
@@ -106,25 +115,18 @@ class Solver(object):
                 self.toynet_ema.update(self.toynet.state_dict())
                 ## prediction over a mini-batch
                 prediction = F.softmax(logit,dim=1).max(1)[1]
+                y_real=torch.cat([y_real,y],dim=0)
+                y_hat=torch.cat([y_hat,prediction],dim=0)
                 accuracy = torch.eq(prediction,y).float().mean()
-           
+                
                 if self.num_avg != 0 :
                     _, avg_soft_logit = self.toynet(x,self.num_avg)
                     avg_prediction = avg_soft_logit.max(1)[1]
                     avg_accuracy = torch.eq(avg_prediction,y).float().mean()
                 else: avg_accuracy = Variable(cuda(torch.zeros(accuracy.size()), self.cuda))
-          
-                '''
-                if self.global_iter % self.batch_size== 0 :
-                    print('i:{} IZY:{:.2f} IZX:{:.2f}'
-                            .format(idx+1, izy_bound.item(), izx_bound.item()), end=' ')
-                    print('acc:{:.4f} avg_acc:{:.4f}'
-                            .format(accuracy.item(), avg_accuracy.item()), end=' ')
-                    print('err:{:.4f} avg_err:{:.4f}'
-                            .format(1-accuracy.item(), 1-avg_accuracy.item()))
-                '''
-                if self.global_iter % 10 == 0 :
-                    if self.tensorboard :
+                
+            
+            if self.tensorboard :
                         self.tf.add_scalars(main_tag='performance/accuracy',
                                             tag_scalar_dict={
                                                 'train_one-shot':accuracy.item(),
@@ -146,9 +148,14 @@ class Solver(object):
                                                 'I(Z;Y)':izy_bound.item(),
                                                 'I(Z;X)':izx_bound.item()},
                                             global_step=self.global_iter)
-
-
+                                   
+           
             if (self.global_epoch % 2) == 0 : self.scheduler.step()
+            #input accuracy and f1-score of train dataset into the dictionary
+            vib_train["Accuracy"].append(float("{:.2f}".format(accuracy.item())))
+            f1score = sklearn.metrics.f1_score(y_real, y_hat,labels=None,pos_label=1, average='weighted',sample_weight=None)
+            vib_train["F1_Score"].append(float("{:.2f}".format(f1score.item())))
+            
             print('[TRAIN RESULT]')
             print('i:{} IZY:{:.2f} IZX:{:.2f}'
                   .format(self.global_epoch, izy_bound.item(), izx_bound.item()), end=' ')
@@ -156,11 +163,25 @@ class Solver(object):
                   .format(accuracy.item(), avg_accuracy.item()), end=' ')
             print('err:{:.4f} avg_err:{:.4f}'
                   .format(1-accuracy.item(), 1-avg_accuracy.item()))
+            
             ## valuate at each epoch
-            self.validate()
-
-        print(" [*] Training Finished!")
+            temp_accuracy,temp_f1score=self.validate()
+            #input accuracy and f1-score of validation dataset into another dictionary
+            
+            vib_valid["F1_Score"].append(float("{:.2f}".format(temp_f1score)))
+            vib_valid["Accuracy"].append(float("{:.2f}".format(temp_accuracy)))
+            
+        print('vib_train:',vib_train)
+        print('vib_validation',vib_valid)
+        working_dir_path = pathlib.Path().absolute()
+        SAVE_DIR_PATH = str(working_dir_path) + '/Dictionaries/VIB'
+        fileName1 =str(self.train_dataset_percentage)+'vib_train'
+        fileName2 =str(self.train_dataset_percentage)+'vib_valid'
+        self.writeToJSONFile(SAVE_DIR_PATH,fileName1,vib_train)
+        self.writeToJSONFile(SAVE_DIR_PATH,fileName2,vib_valid)
         
+        print(" [*] Training Finished!")
+    
     def validate(self, save_ckpt=True):
         self.set_mode('eval')
         #print(save_ckpt)
@@ -172,6 +193,8 @@ class Solver(object):
         correct = 0
         avg_correct = 0
         total_num = 0
+        
+       
         y_real=torch.randn([0])
         y_hat=torch.randn([0])
         ## loop over mini-batches
@@ -201,8 +224,11 @@ class Solver(object):
                 avg_correct += torch.eq(avg_prediction,y).float().sum()
             else :
                 avg_correct = Variable(cuda(torch.zeros(correct.size()), self.cuda))
-
         accuracy = correct/total_num
+        f1score = sklearn.metrics.f1_score(y_real, y_hat,labels=None,pos_label=1, average='weighted',sample_weight=None)
+        #print("validate accuracy",accuracy)
+        #print("f1 score", f1score)
+        
         avg_accuracy = avg_correct/total_num
 
         izy_bound /= total_num
@@ -257,9 +283,11 @@ class Solver(object):
                                     'I(Z;Y)':izy_bound.item(),
                                     'I(Z;X)':izx_bound.item()},
                                 global_step=self.global_iter)
-
+        #with open('vib_valid.json', 'w') as jf:
+            #json.dump(vib_valid, jf)
         self.set_mode('train')
-
+        return accuracy.item(),f1score.item()
+    
     def test(self, save_ckpt=False, data_set='test'):
         """
         evaluate the performance over a specific dataset
@@ -395,3 +423,9 @@ class Solver(object):
 
         else:
             print("=> no checkpoint found at '{}'".format(file_path))
+            
+            
+    def writeToJSONFile(self,path, fileName, data):
+        filePathNameWExt =  path + '/' + fileName + '.json'
+        with open(filePathNameWExt, 'w') as fp:
+            json.dump(data, fp)

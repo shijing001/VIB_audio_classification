@@ -4,6 +4,8 @@ import argparse
 from utils import str2bool
 from solver import Solver
 import joblib
+import json
+import pathlib
 from torch.utils.data import Dataset, DataLoader
 
 class CustomDataset(Dataset):
@@ -51,7 +53,8 @@ def main(args):
     net = Solver(args)
     
     # create your dataloaderß
-    if args.mode == 'train' : net.train()
+    if args.mode == 'train': net.train()
+ 
     elif args.mode == 'validate' : net.validate(save_ckpt=True)
     elif args.mode == 'test' : net.test(save_ckpt=False)
     else : return 0
@@ -70,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_avg', default = 1, type=int, help='the number of samples when\
             performing multi-shot prediction')
     parser.add_argument('--dataset', default= '', type=str, help='dataset name')
+    parser.add_argument('--train_dataset_percentage', default=0.6, type=float, help='train_dataset_percentage')
     parser.add_argument('--batch_size', default = 32, type=int, help='batch size')
     parser.add_argument('--env_name', default='main', type=str, help='visdom env name')
     parser.add_argument('--dset_dir', default='joblib_features', type=str, help='dataset directory path')
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument('--load_ckpt',default='', type=str, help='checkpoint name')
     parser.add_argument('--cuda',default=True, type=str2bool, help='enable cuda')
     parser.add_argument('--mode',default='train', type=str, help='train or test')
-    parser.add_argument('--tensorboard',default=False, type=str2bool, help='enable tensorboard')
+    parser.add_argument('--tensorboard',default=True, type=str2bool, help='enable tensorboard')
     
     args = parser.parse_args()
     ### create data loader
@@ -98,8 +102,12 @@ if __name__ == "__main__":
                                 
     train_dataset, valid_dataset, test_dataset = torch.utils.data.random_split(
     full_dataset, (train_size, valid_size, test_size), generator=torch.Generator().manual_seed(42))
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    train_dataset_inuse_size=int(args.train_dataset_percentage * len(full_dataset))
+    train_dataset_unused_size=len(train_dataset)- train_dataset_inuse_size
+    train_dataset_inuse,train_dataset_unused=torch.utils.data.random_split(
+    train_dataset, (train_dataset_inuse_size,train_dataset_unused_size), generator=torch.Generator().manual_seed(42))
     
+    train_dataloader = DataLoader(train_dataset_inuse, batch_size=args.batch_size, shuffle=True, num_workers=0)
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     my_dataloader = {'train': train_dataloader , 'validate':valid_dataloader, 'test': test_dataloader}

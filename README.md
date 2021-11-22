@@ -23,17 +23,17 @@ The classes the model wants to predict are the following: (0 = neutral, 1 = calm
 
 ## Usage
 
-For the VIB audio classifier, You can either run the Notebook or enter he following lines in terminal directly 
+With Pytorch>=1.7.0 environment, you can either run the Notebook (VIB_audio_classifier) or enter he following lines in terminal directly 
 
-1. train 
-python main.py --mode train --beta 1e-3 --env_name [NAME]
+1. train over Emotion Toronto dataset:
+python main.py --mode train --beta 1e-3 --data emotiontoronto --epoch 50 --lr 1.e-3 --K=64 --batch_size=32
 
 (with default values all parameters unless specified)
 
-2. test
-python main.py --mode test --env_name [NAME] --load_ckpt best_acc.tar
+2. test over Emotion Toronto dataset:
+python main.py --mode test --beta 1e-3 --data emotiontoronto --epoch 50 --lr 1.e-3 --K=64 --batch_size=32 --load_ckpt best_acc.tar
 
 ## References
-
-1. Deep Variational Information Bottleneck, Alemi et al. [paper] (https://arxiv.org/abs/1612.00410)
-2. Variational Information Bottleneck for Effective Low-Resource Fine-Tuning, Karimi et al. [paper](https://openreview.net/forum?id=kvhzKz-_DMF)
+If you find this repository helpful, please cite our paper: 
+Variational Information Bottleneck for Effective Low-resource Audio
+Classification, Shijing Si, et al. 2021, https://www.isca-speech.org/archive/pdfs/interspeech_2021/si21_interspeech.pdf
